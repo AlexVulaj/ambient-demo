@@ -2,8 +2,8 @@ package main
 
 import (
 	"crypto/rand"
-	"encoding/json"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
@@ -62,11 +62,13 @@ func redirectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	code := r.URL.Path[1:]
-	if code == "" {
-		http.Error(w, "missing code", http.StatusBadRequest)
+	if r.URL.Path == "/" {
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(indexHTML))
 		return
 	}
+
+	code := r.URL.Path[1:]
 
 	mu.Lock()
 	url, ok := store[code]
@@ -112,6 +114,61 @@ func analyticsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(snapshot)
 }
+
+const indexHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>URL Shortener</title>
+  <style>
+    body { font-family: sans-serif; max-width: 480px; margin: 80px auto; padding: 0 16px; }
+    h1 { font-size: 1.4rem; margin-bottom: 24px; }
+    input { width: 100%; box-sizing: border-box; padding: 10px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; }
+    button { margin-top: 10px; width: 100%; padding: 10px; font-size: 1rem; background: #0070f3; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #005ed4; }
+    #result { margin-top: 20px; }
+    #result a { color: #0070f3; word-break: break-all; }
+    .error { color: #c00; }
+  </style>
+</head>
+<body>
+  <h1>URL Shortener</h1>
+  <input id="url" type="url" placeholder="https://example.com" />
+  <button onclick="shorten()">Shorten</button>
+  <div id="result"></div>
+
+  <script>
+    async function shorten() {
+      const url = document.getElementById('url').value.trim();
+      const result = document.getElementById('result');
+      result.innerHTML = '';
+
+      if (!url) {
+        result.innerHTML = '<p class="error">Please enter a URL.</p>';
+        return;
+      }
+
+      const resp = await fetch('/shorten', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+
+      if (!resp.ok) {
+        result.innerHTML = '<p class="error">Failed to shorten URL.</p>';
+        return;
+      }
+
+      const data = await resp.json();
+      result.innerHTML = '<p>Short URL: <a href="' + data.short_url + '">' + data.short_url + '</a></p>';
+    }
+
+    document.getElementById('url').addEventListener('keydown', e => {
+      if (e.key === 'Enter') shorten();
+    });
+  </script>
+</body>
+</html>`
 
 func main() {
 	http.HandleFunc("/shorten", shortenHandler)
