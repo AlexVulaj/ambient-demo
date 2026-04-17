@@ -11,6 +11,7 @@ import (
 
 var (
 	store = map[string]string{}
+	hits  = map[string]int{}
 	mu    sync.RWMutex
 )
 
@@ -45,6 +46,7 @@ func shortenHandler(w http.ResponseWriter, r *http.Request) {
 
 	mu.Lock()
 	store[code] = body.URL
+	hits[code] = 0
 	mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -66,9 +68,12 @@ func redirectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mu.RLock()
+	mu.Lock()
 	url, ok := store[code]
-	mu.RUnlock()
+	if ok {
+		hits[code]++
+	}
+	mu.Unlock()
 
 	if !ok {
 		http.Error(w, "not found", http.StatusNotFound)
@@ -78,8 +83,40 @@ func redirectHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, url, http.StatusFound)
 }
 
+func analyticsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	code := r.URL.Path[len("/analytics/"):]
+
+	mu.RLock()
+	defer mu.RUnlock()
+
+	if code != "" {
+		count, ok := hits[code]
+		if !ok {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"code": code, "hits": count})
+		return
+	}
+
+	snapshot := make(map[string]int, len(hits))
+	for k, v := range hits {
+		snapshot[k] = v
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(snapshot)
+}
+
 func main() {
 	http.HandleFunc("/shorten", shortenHandler)
+	http.HandleFunc("/analytics/", analyticsHandler)
+	http.HandleFunc("/analytics", analyticsHandler)
 	http.HandleFunc("/", redirectHandler)
 
 	fmt.Println("Listening on :8080")
