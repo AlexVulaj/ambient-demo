@@ -10,6 +10,13 @@ A minimal URL shortener written in Go. Paste a long URL, get a short one. No dat
 | POST   | `/shorten` | Shorten a URL (JSON API)           |
 | GET    | `/{code}`  | Redirect to the original URL       |
 
+## Using the UI
+
+1. Start the server (see [Development](#development) below)
+2. Open `http://localhost:8080` in your browser
+3. Paste any URL into the input field and click **Shorten** (or press Enter)
+4. Copy the short URL from the result and share it — visiting it will redirect to the original
+
 ## Development
 
 ```bash
